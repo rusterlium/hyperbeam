@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+
+export MIX_ENV=prod
+
+mix do compile, compile.protocols
+iex -pa _build/prod/consolidated -S mix

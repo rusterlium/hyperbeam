@@ -19,7 +19,7 @@ defmodule Hyper.Server do
   end
 
   def handle_request(req) do
-    Logger.info("Processing request on #{inspect self()}")
+    #Logger.info(fn -> "Processing request on #{inspect self()}" end)
     :ok = Hyper.Native.send_resp(req.resource, "Hello from the #{inspect self()}")
   end
 

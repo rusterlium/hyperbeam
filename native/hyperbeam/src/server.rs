@@ -78,7 +78,7 @@ pub fn stop<'a>(env: Env<'a>, terms: &[Term<'a>]) -> Result<Term<'a>, Error> {
     let mut lock = resource.0.lock().unwrap();
 
     if let Some(tx) = lock.take() {
-        tx.send(()).unwrap()
+        let _ = tx.send(());
     }
 
     Ok(atoms::ok().encode(env))
@@ -91,7 +91,7 @@ pub fn send_resp<'a>(env: Env<'a>, terms: &[Term<'a>]) -> Result<Term<'a>, Error
     let body: String = terms[1].decode()?;
 
     if let Some(tx) = lock.take() {
-        tx.send(body).unwrap()
+        let _ = tx.send(body);
     }
 
     Ok(atoms::ok().encode(env))
