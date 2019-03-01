@@ -5,60 +5,91 @@ use hyper::rt;
 use hyper::service::service_fn;
 use hyper::{Body, Request, Response, Server};
 use rustler::{Encoder, Env, Error, OwnedEnv, ResourceArc, Term};
-use std::sync::Mutex;
+use std::collections::VecDeque;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
 
 //pub(crate) struct BodyChannel(Mutex<Option<oneshot::Sender<()>>>);
 pub(crate) struct ResponseChannel(Mutex<Option<oneshot::Sender<String>>>);
 pub(crate) struct ShutdownChannel(Mutex<Option<oneshot::Sender<()>>>);
+pub(crate) struct Select(Arc<AtomicBool>);
 
 #[derive(NifMap)]
-struct Req<'a> {
-    path: &'a str,
-    host: Option<&'a str>,
+struct Req {
+    path: String,
+    host: Option<String>,
     port: Option<u16>,
-    method: &'a str,
-    headers: Vec<(&'a str, Vec<u8>)>,
-    qs: Option<&'a str>,
+    method: String,
+    headers: Vec<(String, String)>,
+    qs: Option<String>,
     resource: ResourceArc<ResponseChannel>,
 }
 
 pub fn start<'a>(env: Env<'a>, _terms: &[Term<'a>]) -> Result<Term<'a>, Error> {
     let (shutdown_tx, shutdown_rx) = futures::sync::oneshot::channel::<()>();
+    let select = Arc::new(AtomicBool::new(false));
 
     let pid = env.pid();
+    let select_flag = Arc::clone(&select);
 
     std::thread::spawn(move || {
         let addr = ([127, 0, 0, 1], 3000).into();
 
+        let queue = Arc::new(Mutex::new(VecDeque::new()));
+
         let server = Server::bind(&addr)
             .serve(move || {
                 let pid = pid.clone();
+                let queue = queue.clone();
+                let select_flag = Arc::clone(&select_flag);
 
                 service_fn(move |req: Request<Body>| {
-                    let mut env = OwnedEnv::new();
                     let (tx, rx) = oneshot::channel::<String>();
+                    let (parts, _body) = req.into_parts();
+                    //let (body_tx, body) = body.channel();
 
-                    let uri = req.uri();
+                    let mut lock = queue.lock().unwrap();
+                    lock.push_back((parts, tx));
 
-                    let headers: Vec<(&str, Vec<u8>)> = req
-                        .headers()
-                        .iter()
-                        .map(|(k, v)| (k.as_str(), v.as_bytes().to_vec()))
-                        .collect();
+                    if select_flag.swap(false, Ordering::Relaxed) == true {
+                        let mut env = OwnedEnv::new();
 
-                    env.send_and_clear(&pid, |env| {
-                        let request = Req {
-                            path: uri.path(),
-                            host: uri.host(),
-                            port: uri.port_u16(),
-                            method: req.method().as_str(),
-                            headers: headers,
-                            qs: uri.query(),
-                            resource: ResourceArc::new(ResponseChannel(Mutex::new(Some(tx)))),
-                        };
+                        env.send_and_clear(&pid, move |env| {
+                            let batch: Vec<Req> = lock
+                                .drain(..)
+                                .map(|(parts, tx)| {
+                                    let uri = parts.uri.clone();
+                                    let path = uri.path().to_owned();
+                                    let host = uri.host().map(|h| h.to_owned());
+                                    let port = uri.port_u16().to_owned();
+                                    let qs = uri.query().map(|q| q.to_owned());
+                                    let method = parts.method.as_str().to_owned();
+                                    let resource =
+                                        ResourceArc::new(ResponseChannel(Mutex::new(Some(tx))));
 
-                        (atoms::request(), request).encode(env)
-                    });
+                                    let headers: Vec<(String, String)> = parts
+                                        .headers
+                                        .iter()
+                                        .map(|(k, v)| {
+                                            let value = String::from_utf8_lossy(v.as_bytes());
+                                            (k.as_str().to_owned(), value.into_owned())
+                                        })
+                                        .collect();
+
+                                    Req {
+                                        path,
+                                        host,
+                                        port,
+                                        method,
+                                        headers,
+                                        qs,
+                                        resource,
+                                    }
+                                })
+                                .collect();
+                            (atoms::request(), batch).encode(env)
+                        });
+                    }
 
                     rx.and_then(|s| futures::future::ok(Response::new(Body::from(s))))
                 })
@@ -69,8 +100,9 @@ pub fn start<'a>(env: Env<'a>, _terms: &[Term<'a>]) -> Result<Term<'a>, Error> {
         rt::run(server)
     });
 
-    let resource = ResourceArc::new(ShutdownChannel(Mutex::new(Some(shutdown_tx))));
-    Ok((atoms::ok(), resource).encode(env))
+    let select_ref = ResourceArc::new(Select(Arc::clone(&select)));
+    let shutdown_ref = ResourceArc::new(ShutdownChannel(Mutex::new(Some(shutdown_tx))));
+    Ok((atoms::ok(), shutdown_ref, select_ref).encode(env))
 }
 
 pub fn stop<'a>(env: Env<'a>, terms: &[Term<'a>]) -> Result<Term<'a>, Error> {
@@ -95,4 +127,12 @@ pub fn send_resp<'a>(env: Env<'a>, terms: &[Term<'a>]) -> Result<Term<'a>, Error
     }
 
     Ok(atoms::ok().encode(env))
+}
+
+pub fn batch_read<'a>(env: Env<'a>, terms: &[Term<'a>]) -> Result<Term<'a>, Error> {
+    let resource: ResourceArc<Select> = terms[0].decode()?;
+
+    resource.0.swap(true, Ordering::Relaxed);
+
+    Ok((atoms::ok()).encode(env))
 }
