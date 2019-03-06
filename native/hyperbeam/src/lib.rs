@@ -1,6 +1,3 @@
-#[macro_use] extern crate rustler_codegen;
-use rustler::{Env, Term};
-
 mod atoms;
 mod server;
 
@@ -15,10 +12,7 @@ rustler::rustler_export_nifs! {
     Some(load)
 }
 
-fn load<'a>(env: Env<'a>, _: Term<'a>) -> bool {
-    rustler::resource_struct_init!(server::ResponseChannel, env);
-    rustler::resource_struct_init!(server::Select, env);
-    rustler::resource_struct_init!(server::ShutdownChannel, env);
-
+fn load(env: rustler::Env, _: rustler::Term) -> bool {
+    server::load(env);
     true
 }

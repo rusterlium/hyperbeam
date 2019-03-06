@@ -5,16 +5,17 @@ use hyper::rt;
 use hyper::service::service_fn;
 use hyper::{Body, Request, Response, Server};
 use rustler::{Encoder, Env, Error, OwnedEnv, ResourceArc, Term};
+use rustler_codegen::NifMap as Map;
 use std::collections::VecDeque;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
-//pub(crate) struct BodyChannel(Mutex<Option<oneshot::Sender<()>>>);
-pub(crate) struct ResponseChannel(Mutex<Option<oneshot::Sender<String>>>);
-pub(crate) struct ShutdownChannel(Mutex<Option<oneshot::Sender<()>>>);
-pub(crate) struct Select(Arc<AtomicBool>);
+//struct BodyChannel(Mutex<Option<oneshot::Sender<()>>>);
+struct ResponseChannel(Mutex<Option<oneshot::Sender<String>>>);
+struct ShutdownChannel(Mutex<Option<oneshot::Sender<()>>>);
+struct Select(Arc<AtomicBool>);
 
-#[derive(NifMap)]
+#[derive(Map)]
 struct Req {
     path: String,
     host: Option<String>,
@@ -135,4 +136,11 @@ pub fn batch_read<'a>(env: Env<'a>, terms: &[Term<'a>]) -> Result<Term<'a>, Erro
     resource.0.swap(true, Ordering::Relaxed);
 
     Ok((atoms::ok()).encode(env))
+}
+
+pub fn load(env: Env) -> bool {
+    rustler::resource_struct_init!(ResponseChannel, env);
+    rustler::resource_struct_init!(Select, env);
+    rustler::resource_struct_init!(ShutdownChannel, env);
+    true
 }
