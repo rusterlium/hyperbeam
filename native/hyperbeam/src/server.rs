@@ -4,13 +4,11 @@ use futures::Future;
 use hyper::rt;
 use hyper::service::service_fn;
 use hyper::{Body, Request, Response, Server};
-use rustler::{Encoder, Env, Error, OwnedEnv, ResourceArc, Term};
-use rustler_codegen::NifMap as Map;
+use rustler::{Encoder, Env, Error, NifMap as Map, OwnedEnv, ResourceArc, Term};
 use std::collections::VecDeque;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
-//struct BodyChannel(Mutex<Option<oneshot::Sender<()>>>);
 struct ResponseChannel(Mutex<Option<oneshot::Sender<String>>>);
 struct ShutdownChannel(Mutex<Option<oneshot::Sender<()>>>);
 struct Select(Arc<AtomicBool>);
@@ -47,7 +45,6 @@ pub fn start<'a>(env: Env<'a>, _terms: &[Term<'a>]) -> Result<Term<'a>, Error> {
                 service_fn(move |req: Request<Body>| {
                     let (tx, rx) = oneshot::channel::<String>();
                     let (parts, _body) = req.into_parts();
-                    //let (body_tx, body) = body.channel();
 
                     let mut lock = queue.lock().unwrap();
                     lock.push_back((parts, tx));

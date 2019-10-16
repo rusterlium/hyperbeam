@@ -1,3 +1,5 @@
+use rustler::{Env, Term};
+
 mod atoms;
 mod server;
 
@@ -12,7 +14,7 @@ rustler::rustler_export_nifs! {
     Some(load)
 }
 
-fn load(env: rustler::Env, _: rustler::Term) -> bool {
+fn load(env: Env, _: Term) -> bool {
     server::load(env);
     true
 }
