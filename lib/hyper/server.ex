@@ -3,17 +3,24 @@ defmodule Hyper.Server do
 
   require Logger
 
+  defstruct read: nil, shutdown: nil
+
   def start_link(opts) do
     GenServer.start_link(__MODULE__, opts, name: __MODULE__)
   end
 
   def init(opts) do
-    {:ok, rx} = Hyper.Native.start(opts)
-    {:ok, rx}
+    {:ok, shutdown, read} = Hyper.Native.start(opts)
+    :ok = Hyper.Native.batch_read(read)
+    {:ok, %__MODULE__{read: read, shutdown: shutdown}}
   end
 
-  def handle_info({:request, req}, state) do
-    Task.start(fn -> Hyper.Server.handle_request(req) end)
+  def handle_info({:request, requests}, state) do
+    for request <- requests do
+      Task.start(fn -> Hyper.Server.handle_request(request) end)
+    end
+
+    :ok = Hyper.Native.batch_read(state.read)
 
     {:noreply, state}
   end
@@ -23,8 +30,8 @@ defmodule Hyper.Server do
     :ok = Hyper.Native.send_resp(req.resource, "Hello from the #{inspect self()}")
   end
 
-  def terminate(_, rx) do
-    Hyper.stop(rx)
+  def terminate(_, state) do
+    Hyper.stop(state.shutdown)
     :ok
   end
 end
