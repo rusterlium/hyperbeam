@@ -1,4 +1,4 @@
-# Hyper
+# Hyperbeam
 
 > Experimental NIF wrapper around Rust-based [Hyper] web server.
 

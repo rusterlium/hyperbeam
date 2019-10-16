@@ -4,7 +4,7 @@ mod atoms;
 mod server;
 
 rustler::rustler_export_nifs! {
-    "Elixir.Hyper.Native",
+    "Elixir.Hyperbeam.Native",
     [
         ("start", 1, server::start),
         ("stop", 1, server::stop),

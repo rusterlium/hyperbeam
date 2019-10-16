@@ -1,14 +1,14 @@
-defmodule Hyper.Application do
+defmodule Hyperbeam.Application do
   @moduledoc false
 
   use Application
 
   def start(_type, _args) do
     children = [
-      Hyper.Server,
+      Hyperbeam.Server,
     ]
 
-    opts = [strategy: :one_for_one, name: Hyper.Supervisor]
+    opts = [strategy: :one_for_one, name: Hyperbeam.Supervisor]
     Supervisor.start_link(children, opts)
   end
 end

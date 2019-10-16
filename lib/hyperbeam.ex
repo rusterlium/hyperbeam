@@ -1,5 +1,5 @@
-defmodule Hyper do
-  alias Hyper.Native
+defmodule Hyperbeam do
+  alias Hyperbeam.Native
 
   def start(opts \\ %{}) do
     Native.start(opts)

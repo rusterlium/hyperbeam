@@ -1,5 +1,5 @@
-defmodule Hyper.Native do
-  use Rustler, otp_app: :hyper, crate: :hyperbeam
+defmodule Hyperbeam.Native do
+  use Rustler, otp_app: :hyperbeam
 
   def start(_opts), do: error()
   def stop(_resource), do: error()

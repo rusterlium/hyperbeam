@@ -1,4 +1,4 @@
-defmodule Hyper.Server do
+defmodule Hyperbeam.Server do
   use GenServer
 
   require Logger
@@ -10,28 +10,28 @@ defmodule Hyper.Server do
   end
 
   def init(opts) do
-    {:ok, shutdown, read} = Hyper.Native.start(opts)
-    :ok = Hyper.Native.batch_read(read)
+    {:ok, shutdown, read} = Hyperbeam.Native.start(opts)
+    :ok = Hyperbeam.Native.batch_read(read)
     {:ok, %__MODULE__{read: read, shutdown: shutdown}}
   end
 
   def handle_info({:request, requests}, state) do
     for request <- requests do
-      Task.start(fn -> Hyper.Server.handle_request(request) end)
+      Task.start(fn -> Hyperbeam.Server.handle_request(request) end)
     end
 
-    :ok = Hyper.Native.batch_read(state.read)
+    :ok = Hyperbeam.Native.batch_read(state.read)
 
     {:noreply, state}
   end
 
   def handle_request(req) do
     #Logger.info(fn -> "Processing request on #{inspect self()}" end)
-    :ok = Hyper.Native.send_resp(req.resource, "Hello from the #{inspect self()}")
+    :ok = Hyperbeam.Native.send_resp(req.resource, "Hello from the #{inspect self()}")
   end
 
   def terminate(_, state) do
-    Hyper.stop(state.shutdown)
+    Hyperbeam.stop(state.shutdown)
     :ok
   end
 end

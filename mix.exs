@@ -1,9 +1,9 @@
-defmodule Hyper.Mixfile do
+defmodule Hyperbeam.Mixfile do
   use Mix.Project
 
   def project do
     [
-      app: :hyper,
+      app: :hyperbeam,
       compilers: [:rustler] ++ Mix.compilers(),
       version: "0.1.0",
       elixir: "~> 1.9",
@@ -16,7 +16,7 @@ defmodule Hyper.Mixfile do
   def application do
     [
       extra_applications: [:logger],
-      mod: {Hyper.Application, []}
+      mod: {Hyperbeam.Application, []}
     ]
   end
 
