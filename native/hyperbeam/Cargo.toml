@@ -10,6 +10,6 @@ path = "src/lib.rs"
 crate-type = ["cdylib"]
 
 [dependencies]
-rustler = "0.21"
+rustler = { git = "https://github.com/rusterlium/rustler", branch = "master" }
 hyper = "0.12.24"
 futures = "0.1"

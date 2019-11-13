@@ -1,12 +1,12 @@
-rustler::rustler_atoms! {
-    atom ok;
-    atom error;
-    atom request;
-    atom path;
-    atom host;
-    atom port;
-    atom method;
-    atom headers;
-    atom qs;
-    atom resource;
+rustler::atoms! {
+    ok,
+    error,
+    request,
+    path,
+    host,
+    port,
+    method,
+    headers,
+    qs,
+    resource,
 }

@@ -22,7 +22,7 @@ defmodule Hyperbeam.Mixfile do
 
   defp deps do
     [
-      {:rustler, "~> 0.21"},
+      {:rustler, github: "rusterlium/rustler", sparse: "rustler_mix", branch: "master"},
     ]
   end
 end

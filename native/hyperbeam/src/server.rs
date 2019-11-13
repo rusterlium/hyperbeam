@@ -4,14 +4,14 @@ use futures::Future;
 use hyper::rt;
 use hyper::service::service_fn;
 use hyper::{Body, Request, Response, Server};
-use rustler::{Encoder, Env, Error, NifMap as Map, OwnedEnv, ResourceArc, Term};
+use rustler::{Atom, Encoder, Env, Error, NifMap as Map, OwnedEnv, ResourceArc, Term};
 use std::collections::VecDeque;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
-struct ResponseChannel(Mutex<Option<oneshot::Sender<String>>>);
-struct ShutdownChannel(Mutex<Option<oneshot::Sender<()>>>);
-struct Select(Arc<AtomicBool>);
+pub struct ResponseChannel(Mutex<Option<oneshot::Sender<String>>>);
+pub struct ShutdownChannel(Mutex<Option<oneshot::Sender<()>>>);
+pub struct Select(Arc<AtomicBool>);
 
 #[derive(Map)]
 struct Req {
@@ -24,7 +24,17 @@ struct Req {
     resource: ResourceArc<ResponseChannel>,
 }
 
-pub fn start<'a>(env: Env<'a>, _terms: &[Term<'a>]) -> Result<Term<'a>, Error> {
+pub fn load(env: Env, _: Term) -> bool {
+    rustler::resource!(ResponseChannel, env);
+    rustler::resource!(Select, env);
+    rustler::resource!(ShutdownChannel, env);
+    true
+}
+
+type StartResult = Result<(Atom, ResourceArc<ShutdownChannel>, ResourceArc<Select>), Error>;
+
+#[rustler::nif]
+pub fn start(env: Env, _term: Term) -> StartResult {
     let (shutdown_tx, shutdown_rx) = futures::sync::oneshot::channel::<()>();
     let select = Arc::new(AtomicBool::new(false));
 
@@ -32,6 +42,7 @@ pub fn start<'a>(env: Env<'a>, _terms: &[Term<'a>]) -> Result<Term<'a>, Error> {
     let select_flag = Arc::clone(&select);
 
     std::thread::spawn(move || {
+        // TODO: get this from configuration passed to this NIF
         let addr = ([127, 0, 0, 1], 3000).into();
 
         let queue = Arc::new(Mutex::new(VecDeque::new()));
@@ -100,44 +111,33 @@ pub fn start<'a>(env: Env<'a>, _terms: &[Term<'a>]) -> Result<Term<'a>, Error> {
 
     let select_ref = ResourceArc::new(Select(Arc::clone(&select)));
     let shutdown_ref = ResourceArc::new(ShutdownChannel(Mutex::new(Some(shutdown_tx))));
-    Ok((atoms::ok(), shutdown_ref, select_ref).encode(env))
+    Ok((atoms::ok(), shutdown_ref, select_ref))
 }
 
-pub fn stop<'a>(env: Env<'a>, terms: &[Term<'a>]) -> Result<Term<'a>, Error> {
-    let resource: ResourceArc<ShutdownChannel> = terms[0].decode()?;
+#[rustler::nif]
+pub fn stop(resource: ResourceArc<ShutdownChannel>) -> Atom {
     let mut lock = resource.0.lock().unwrap();
 
     if let Some(tx) = lock.take() {
         let _ = tx.send(());
     }
 
-    Ok(atoms::ok().encode(env))
+    atoms::ok()
 }
 
-pub fn send_resp<'a>(env: Env<'a>, terms: &[Term<'a>]) -> Result<Term<'a>, Error> {
-    let resource: ResourceArc<ResponseChannel> = terms[0].decode()?;
+#[rustler::nif]
+pub fn send_resp(resource: ResourceArc<ResponseChannel>, body: String) -> Atom {
     let mut lock = resource.0.lock().unwrap();
-
-    let body: String = terms[1].decode()?;
 
     if let Some(tx) = lock.take() {
         let _ = tx.send(body);
     }
 
-    Ok(atoms::ok().encode(env))
+    atoms::ok()
 }
 
-pub fn batch_read<'a>(env: Env<'a>, terms: &[Term<'a>]) -> Result<Term<'a>, Error> {
-    let resource: ResourceArc<Select> = terms[0].decode()?;
-
-    resource.0.swap(true, Ordering::Relaxed);
-
-    Ok((atoms::ok()).encode(env))
-}
-
-pub fn load(env: Env) -> bool {
-    rustler::resource_struct_init!(ResponseChannel, env);
-    rustler::resource_struct_init!(Select, env);
-    rustler::resource_struct_init!(ShutdownChannel, env);
-    true
+#[rustler::nif]
+pub fn batch_read(select: ResourceArc<Select>) -> Atom {
+    select.0.swap(true, Ordering::Relaxed);
+    atoms::ok()
 }
